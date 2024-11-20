@@ -1,8 +1,15 @@
-from moviepy.video.io.VideoFileClip import VideoFileClip
+from moviepy.editor import VideoFileClip, CompositeVideoClip
 from moviepy.video.fx.all import crop
 from moviepy.video.compositing.concatenate import concatenate_videoclips
+from PIL import Image, ImageFilter
+from numpy import array as np_array
 import argparse
 import re
+
+def blur(image):
+    img = Image.fromarray(image)
+    blurred_img = img.filter(ImageFilter.GaussianBlur(radius=15))
+    return np_array(blurred_img)
 
 def split_video(input_file, clips, output_file, short=False):
     try:
@@ -24,10 +31,16 @@ def split_video(input_file, clips, output_file, short=False):
                 raise ValueError("Input video is too narrow for the desired aspect ratio.")
 
             x_center = video_width / 2
-            crop_x1 = x_center - target_width / 2
-            crop_x2 = x_center + target_width / 2
+            drop_crop_x1 = x_center - target_width / 2
+            drop_crop_x2 = x_center + target_width / 2
 
-            trimmed_video = crop(trimmed_video, x1=crop_x1, y1=0, x2=crop_x2, y2=video_height)
+            trimmed_backdrop_video = crop(trimmed_video, x1=drop_crop_x1, y1=0, x2=drop_crop_x2, y2=video_height)
+            blurred_backdrop = trimmed_backdrop_video.fl_image(blur)
+
+            trimmed_main_video = crop(trimmed_video, width=video_height, height=video_height, x_center=video_width // 2, y_center=video_height // 2)
+            trimmed_main_video = trimmed_main_video.resize(width=blurred_backdrop.w)
+
+            trimmed_video = CompositeVideoClip([blurred_backdrop, trimmed_main_video.set_position("center")])
 
         trimmed_video.write_videofile(output_file, codec="libx264", audio_codec="aac")
 
